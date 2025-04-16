@@ -31,7 +31,7 @@
 		"svelte": "^5.0.0",
 		"svelte-check": "^4.0.0",
 		"typescript": "^5.0.0",
-		"vite": "^6.2.5"
+		"vite": "^6.3.0"
 	},
 	"dependencies": {
 		"html2canvas": "^1.4.1",
