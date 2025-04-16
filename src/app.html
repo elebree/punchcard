@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+	<title>GitHub PunchCard – Visualize Commit Activity</title>
+	<meta charset="utf-8" />
+	<link rel="icon" href="%sveltekit.assets%/favicon.png" />
+	<link href="https://fonts.bunny.net/css2?family=Lexend+Deca:wght@300&display=swap" rel="stylesheet">
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="description"
+		content="Visualize GitHub commit activity as a punch card. Analyze developer patterns, commit frequency, and team productivity with an interactive heatmap. No login or setup required.">
+	<meta name="keywords"
+		content="GitHub punch card, commit heatmap, GitHub activity, developer analytics, commit visualization, open source dashboard">
+	<link rel="canonical" href="https://punchcard.elebree.com/">
+
+	<meta property="og:title" content="GitHub PunchCard – Visualize Commit Activity">
+	<meta property="og:description"
+		content="Explore commit activity across GitHub repos with this interactive punch card heatmap. Paste a repo URL and see patterns by day and hour.">
+	<meta property="og:image"
+		content="https://raw.githubusercontent.com/elebree/punchcard/main/static/punchcard-preview.png">
+	<meta property="og:url" content="https://punchcard.elebree.com/">
+	<meta property="og:type" content="website">
+
+	<meta name="twitter:card" content="summary_large_image">
+	<meta name="twitter:title" content="GitHub PunchCard – Visualize Commit Activity">
+	<meta name="twitter:description"
+		content="Visualize commit frequency and patterns on GitHub with a responsive heatmap punch card.">
+	<meta name="twitter:image"
+		content="https://raw.githubusercontent.com/elebree/punchcard/main/static/punchcard-preview.png">
+	<style>
+		html,
+		body {
+			height: 100%;
+			margin: 0;
+			font-family: 'Lexend Deca', sans-serif;
+		}
+	</style>
+	%sveltekit.head%
+</head>
+
+<body data-sveltekit-preload-data="hover">
+	<div style="display: contents;">%sveltekit.body%</div>
+</body>
+
+</html>
