@@ -130,6 +130,11 @@
     updatePunchCardData();
   }
 
+  function handleTagClick(tag: string) {
+    const githubUrl = `https://github.com/${tag}`;
+    window.open(githubUrl, "_blank");
+  }
+
   onMount(() => {
     handleResize();
     const params = new URLSearchParams(window.location.search);
@@ -168,6 +173,7 @@
           onlyUnique
           onTagAdded={(tag: string) => handleTagAdd(tag)}
           onTagRemoved={handleTagRemove}
+          onTagClick={handleTagClick}
         />
         <button class="button-add" on:click={addRepo} aria-label="Add Repo"
           >Add Repo</button
@@ -265,6 +271,10 @@
       flex: 1;
       border-right: none;
       border-radius: 0.15rem 0 0 0.15rem;
+    }
+
+    :global(.svelte-tags-input-layout .svelte-tags-input-tag) {
+      cursor: default;
     }
   }
 
