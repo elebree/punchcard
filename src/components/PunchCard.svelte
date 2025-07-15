@@ -1,16 +1,14 @@
 <script lang="ts">
   export let data: Map<string, number>;
   export let vertical: boolean = false;
-
-  const maxRadius = 12;
-  const minRadius = 2;
+  export let radiusRange = { min: 2, max: 12 };
   const gridMax = "7-24";
 
-  const days = new Array(7).fill(0).map((x, i) =>
-    new Date(1, 3, i).toLocaleString("en", {
-      weekday: "short",
-    })
-  );
+  const days = new Array(7)
+    .fill(0)
+    .map((x, i) =>
+      new Date(1, 3, i).toLocaleString("en", { weekday: "short" })
+    );
 
   $: svgWidth = netX(vertical, gridMax);
   $: svgHeight = netY(vertical, gridMax);
@@ -22,26 +20,27 @@
   const radius = (commits: number) =>
     commits === 0 || maxCommits === 0
       ? 0
-      : minRadius + commits * commitRatio * (maxRadius - minRadius);
+      : radiusRange.min +
+        commits * commitRatio * (radiusRange.max - radiusRange.min);
 
   const color = (commits: number) => {
     const lightness = 90 - commits * commitRatio * 60;
-    return `hsl(340, 100%, ${lightness}%)`;
+    return `hsl(340, 100%, ${Math.max(0, lightness)}%)`;
   };
 
   function parseEntry(entry: string): [number, number] {
-    const [v0, v1] = entry.split("-").map((v) => (isNaN(+v) ? 0 : +v + 1));
-    return [v0, v1];
+    const [day, hour] = entry.split("-").map((v) => (isNaN(+v) ? 0 : +v + 1));
+    return [day, hour];
   }
 
   function netX(vert: boolean, entry: string) {
-    const [v0, v1] = parseEntry(entry);
-    return vert ? v0 * 40 : v1 * 30;
+    const [day, hour] = parseEntry(entry);
+    return vert ? day * 40 : hour * 30;
   }
 
   function netY(vert: boolean, entry: string) {
-    const [v0, v1] = parseEntry(entry);
-    return vert ? v1 * 30 : v0 * 30;
+    const [day, hour] = parseEntry(entry);
+    return vert ? hour * 30 : day * 30;
   }
 </script>
 

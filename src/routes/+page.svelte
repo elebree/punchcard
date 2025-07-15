@@ -4,40 +4,32 @@
   import Tags from "svelte-tags-input";
   import PunchCard from "../components/PunchCard.svelte";
   let vertical = false;
-  let repoList: string[] = [];
+  let selectedRepos: string[] = [];
   let punchCardData = new Map<string, number>();
-  const repoCache = new Map<string, number[][]>();
+  const repoPunchCardCache = new Map<string, number[][]>();
   let punchCardWrapper: HTMLElement;
 
-  const emptyPunchCardData = () =>
+  const generatePunchCardData = (randomize: boolean = false) =>
     new Map(
       Array.from({ length: 24 * 7 }, (_, i) => [
         `${Math.floor(i / 24)}-${i % 24}`,
-        0,
+        randomize ? (Math.random() > 0.95 ? Math.random() : 0) : 0,
       ])
     );
 
-  const randomPunchCardData = () =>
-    new Map(
-      Array.from({ length: 24 * 7 }, (_, i) => [
-        `${Math.floor(i / 24)}-${i % 24}`,
-        Math.random() > 0.95 ? Math.random() : 0,
-      ])
-    );
+  const emptyPunchCardData = () => generatePunchCardData();
+  const randomPunchCardData = () => generatePunchCardData(true);
 
   function normalizeRepoInput(input: string): string | null {
     const trimmed = input.trim().replace(/^https:\/\/github\.com\//, "");
     const parts = trimmed.split("/");
-    if (parts.length >= 2) {
-      return `${parts[0]}/${parts[1]}`;
-    }
-    return null;
+    return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : null;
   }
 
   function updateQueryString() {
     const params = new URLSearchParams(window.location.search);
-    repoList.length
-      ? params.set("repo", repoList.join(","))
+    selectedRepos.length
+      ? params.set("repo", selectedRepos.join(","))
       : params.delete("repo");
     const newUrl = `${window.location.pathname}?${params.toString()}`;
     history.replaceState(null, "", newUrl);
@@ -62,54 +54,54 @@
     if (!punchCardWrapper) return;
     const canvas = await html2canvas(punchCardWrapper);
     const link = document.createElement("a");
-    link.download = `punchcard_${repoList.map((v) => v.replaceAll("/", "-")).join("_")}.png`;
+    link.download = `punchcard_${selectedRepos.map((v) => v.replaceAll("/", "-")).join("_")}.png`;
     link.href = canvas.toDataURL();
     link.click();
   }
-
   async function fetchRepoPunchCard(
     owner: string,
     repo: string
   ): Promise<number[][]> {
     const key = `${owner}/${repo}`;
-    if (repoCache.has(key)) return repoCache.get(key)!;
+    if (repoPunchCardCache.has(key)) return repoPunchCardCache.get(key)!;
 
     const res = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/stats/punch_card`
     );
     if (!res.ok) throw new Error(`Failed to fetch ${key}`);
-    return await res.json();
+
+    const data = await res.json();
+    repoPunchCardCache.set(key, data);
+    return data;
   }
 
   async function updatePunchCardData() {
     const combinedMap = emptyPunchCardData();
 
-    for (const repo of repoList) {
+    const fetchPromises = selectedRepos.map(async (repo) => {
       const [owner, name] = repo.split("/");
-      if (!owner || !name) continue;
-      const key = `${owner}/${name}`;
+      if (!owner || !name) return;
 
-      let rawData: number[][];
+      try {
+        let rawData: number[][];
 
-      if (repoCache.has(key)) {
-        rawData = repoCache.get(key)!;
-      } else {
-        try {
+        if (repoPunchCardCache.has(`${owner}/${name}`)) {
+          rawData = repoPunchCardCache.get(`${owner}/${name}`)!;
+        } else {
           rawData = await fetchRepoPunchCard(owner, name);
-          repoCache.set(key, rawData);
-        } catch (err) {
-          console.error(`Failed to fetch data for ${key}`, err);
-          continue;
         }
-      }
 
-      for (const [day, hour, commits] of rawData) {
-        const mapKey = `${day}-${hour}`;
-        const prev = combinedMap.get(mapKey) || 0;
-        combinedMap.set(mapKey, prev + commits);
+        for (const [day, hour, commits] of rawData) {
+          const mapKey = `${day}-${hour}`;
+          const prev = combinedMap.get(mapKey) || 0;
+          combinedMap.set(mapKey, prev + commits);
+        }
+      } catch (err) {
+        console.error(`Failed to fetch data for ${repo}`, err);
       }
-    }
+    });
 
+    await Promise.all(fetchPromises);
     punchCardData = combinedMap;
   }
 
@@ -120,7 +112,7 @@
   function handleTagAdd(tag: string) {
     const normalized = normalizeRepoInput(tag);
     if (!normalized) return;
-    repoList = [...repoList.filter((v) => v !== tag), normalized];
+    selectedRepos = [...selectedRepos.filter((v) => v !== tag), normalized];
     updateQueryString();
     updatePunchCardData();
   }
@@ -135,24 +127,46 @@
     window.open(githubUrl, "_blank");
   }
 
+  function handleRepoLinkClick(
+    e: MouseEvent & {
+      currentTarget: EventTarget & HTMLAnchorElement;
+    }
+  ) {
+    e.preventDefault();
+    handleTagAdd(e.currentTarget.href);
+  }
+
   onMount(() => {
     handleResize();
     const params = new URLSearchParams(window.location.search);
     const repoParam = params.get("repo") || "";
     const tags = repoParam.split(",").filter(Boolean);
-    repoList = Array.from(
-      new Set(
-        tags
-          .map(normalizeRepoInput)
-          .filter((tag): tag is string => tag !== null)
-      )
+    selectedRepos = Array.from(
+      new Set(tags.map(normalizeRepoInput).filter(Boolean) as string[])
     );
     updatePunchCardData();
 
     const interval = setInterval(() => {
-      if (!repoList || repoList.length === 0)
+      if (!selectedRepos || selectedRepos.length === 0)
         punchCardData = randomPunchCardData();
     }, 2000);
+
+    // Add drag & drop listener
+    window.addEventListener("dragover", (e) => {
+      e.preventDefault();
+    });
+
+    window.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const data = e.dataTransfer?.getData("text/plain")?.trim();
+      if (!data) return;
+      const normalized = normalizeRepoInput(data);
+      if (normalized && !selectedRepos.includes(normalized)) {
+        selectedRepos = [...selectedRepos, normalized];
+        updateQueryString();
+        updatePunchCardData();
+      }
+    });
 
     return () => {
       clearInterval(interval);
@@ -168,10 +182,10 @@
       <div class="repo-input">
         <Tags
           class="tags-input"
-          bind:tags={repoList}
+          bind:tags={selectedRepos}
           placeholder="GitHub owner/repo or full URL"
           onlyUnique
-          onTagAdded={(tag: string) => handleTagAdd(tag)}
+          onTagAdded={handleTagAdd}
           onTagRemoved={handleTagRemove}
           onTagClick={handleTagClick}
         />
@@ -204,10 +218,12 @@
     </p>
     <p>
       Just type a repository name like <a
-        href="https://github.com/sveltejs/svelte"><b>sveltejs/svelte</b></a
-      >, or paste a full
-      <b>GitHub</b> URL. Add more than one repo to see combined activity. The chart
-      can be exported as a PNG or you can share the result just by copying the URL.
+        href="https://github.com/sveltejs/svelte"
+        on:click={handleRepoLinkClick}><b>sveltejs/svelte</b></a
+      >, paste a full
+      <b>GitHub</b> URL, or simply drag and drop the link onto the page. Add more
+      than one repo to see combined activity. The chart can be exported as a PNG
+      or you can share the result just by copying the URL.
     </p>
     <p>
       Made with ❤️ by <a href="https://github.com/vnau/punchcard"><b>vnau</b></a
@@ -296,5 +312,18 @@
 
   svg.icon {
     width: 1em;
+  }
+
+  :global(.svelte-tags-input-tag::before) {
+    content: "";
+    display: inline-block;
+    width: 1.4em;
+    height: 1.4em;
+    fill: white;
+    margin-right: 0.2em;
+    background-image: url("github.svg");
+    background-size: contain;
+    background-repeat: no-repeat;
+    vertical-align: middle;
   }
 </style>
