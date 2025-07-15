@@ -226,7 +226,8 @@
       or you can share the result just by copying the URL.
     </p>
     <p>
-      Made with ❤️ by <a href="https://github.com/vnau/punchcard"><b>vnau</b></a
+      Made with ❤️ by <a href="https://github.com/elebree/punchcard"
+        ><b>elebree</b></a
       >.
     </p>
   </div>

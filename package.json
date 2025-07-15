@@ -4,10 +4,10 @@
 	"version": "1.0.0",
 	"type": "module",
 	"author": {
-		"name": "vnau"
+		"name": "elebree"
 	},
 	"description": "GitHub PunchCard shows commit activity by day and hour in a clean, shareable heatmap.",
-	"homepage": "https://github.com/vnau/punchcard",
+	"homepage": "https://elebree.github.io/punchcard",
 	"license": "MIT",
 	"keywords": [
 		"github punchcard",
