@@ -3,11 +3,14 @@
   import { onMount } from "svelte";
   import Tags from "svelte-tags-input";
   import PunchCard from "../components/PunchCard.svelte";
+  import { DataRetriever } from "../services/DataRetriever";
+  import type { IDataRetriever } from "../types/IDataRetriever";
   let vertical = false;
   let selectedRepos: string[] = [];
   let punchCardData = new Map<string, number>();
   const repoPunchCardCache = new Map<string, number[][]>();
   let punchCardWrapper: HTMLElement;
+  let dataRetriever: IDataRetriever = new DataRetriever();
 
   const generatePunchCardData = (randomize: boolean = false) =>
     new Map(
@@ -19,12 +22,6 @@
 
   const emptyPunchCardData = () => generatePunchCardData();
   const randomPunchCardData = () => generatePunchCardData(true);
-
-  function normalizeRepoInput(input: string): string | null {
-    const trimmed = input.trim().replace(/^https:\/\/github\.com\//, "");
-    const parts = trimmed.split("/");
-    return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : null;
-  }
 
   function updateQueryString() {
     const params = new URLSearchParams(window.location.search);
@@ -58,37 +55,18 @@
     link.href = canvas.toDataURL();
     link.click();
   }
-  async function fetchRepoPunchCard(
-    owner: string,
-    repo: string
-  ): Promise<number[][]> {
-    const key = `${owner}/${repo}`;
-    if (repoPunchCardCache.has(key)) return repoPunchCardCache.get(key)!;
-
-    const res = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/stats/punch_card`
-    );
-    if (!res.ok) throw new Error(`Failed to fetch ${key}`);
-
-    const data = await res.json();
-    repoPunchCardCache.set(key, data);
-    return data;
-  }
 
   async function updatePunchCardData() {
     const combinedMap = emptyPunchCardData();
 
-    const fetchPromises = selectedRepos.map(async (repo) => {
-      const [owner, name] = repo.split("/");
-      if (!owner || !name) return;
-
+    const fetchPromises = selectedRepos.map(async (resource) => {
       try {
         let rawData: number[][];
-
-        if (repoPunchCardCache.has(`${owner}/${name}`)) {
-          rawData = repoPunchCardCache.get(`${owner}/${name}`)!;
+        if (repoPunchCardCache.has(resource)) {
+          rawData = repoPunchCardCache.get(resource)!;
         } else {
-          rawData = await fetchRepoPunchCard(owner, name);
+          rawData = await dataRetriever.fetchData(resource);
+          repoPunchCardCache.set(resource, rawData);
         }
 
         for (const [day, hour, commits] of rawData) {
@@ -97,7 +75,7 @@
           combinedMap.set(mapKey, prev + commits);
         }
       } catch (err) {
-        console.error(`Failed to fetch data for ${repo}`, err);
+        console.error(`Failed to fetch data for ${resource}`, err);
       }
     });
 
@@ -110,7 +88,8 @@
   }
 
   function handleTagAdd(tag: string) {
-    const normalized = normalizeRepoInput(tag);
+    var normalized = dataRetriever.ensureResource(tag);
+
     if (!normalized) return;
     selectedRepos = [...selectedRepos.filter((v) => v !== tag), normalized];
     updateQueryString();
@@ -123,8 +102,7 @@
   }
 
   function handleTagClick(tag: string) {
-    const githubUrl = `https://github.com/${tag}`;
-    window.open(githubUrl, "_blank");
+    dataRetriever.handleOpen(tag);
   }
 
   function handleRepoLinkClick(
@@ -142,7 +120,11 @@
     const repoParam = params.get("repo") || "";
     const tags = repoParam.split(",").filter(Boolean);
     selectedRepos = Array.from(
-      new Set(tags.map(normalizeRepoInput).filter(Boolean) as string[])
+      new Set(
+        tags
+          .map((tag) => dataRetriever.ensureResource(tag))
+          .filter(Boolean) as string[]
+      )
     );
     updatePunchCardData();
 
@@ -160,7 +142,7 @@
       e.preventDefault();
       const data = e.dataTransfer?.getData("text/plain")?.trim();
       if (!data) return;
-      const normalized = normalizeRepoInput(data);
+      const normalized = dataRetriever.ensureResource(data);
       if (normalized && !selectedRepos.includes(normalized)) {
         selectedRepos = [...selectedRepos, normalized];
         updateQueryString();
@@ -293,6 +275,19 @@
     :global(.svelte-tags-input-layout .svelte-tags-input-tag) {
       cursor: default;
     }
+
+    :global(.svelte-tags-input-layout .svelte-tags-input-tag::before) {
+      content: "";
+      display: inline-block;
+      width: 1.4em;
+      height: 1.4em;
+      fill: white;
+      margin-right: 0.2em;
+      background-image: url("data:image/svg+xml,%3C%3Fxml version='1.0' encoding='UTF-8' standalone='no'%3F%3E%3Csvg xmlns:svg='http://www.w3.org/2000/svg' xmlns='http://www.w3.org/2000/svg' height='32' fill='white' aria-hidden='true' viewBox='0 0 24 24' version='1.1' width='32' data-view-component='true'%3E%3Cpath d='M12 1C5.923 1 1 5.923 1 12c0 4.867 3.149 8.979 7.521 10.436.55.096.756-.233.756-.522 0-.262-.013-1.128-.013-2.049-2.764.509-3.479-.674-3.699-1.292-.124-.317-.66-1.293-1.127-1.554-.385-.207-.936-.715-.014-.729.866-.014 1.485.797 1.691 1.128.99 1.663 2.571 1.196 3.204.907.096-.715.385-1.196.701-1.471-2.448-.275-5.005-1.224-5.005-5.432 0-1.196.426-2.186 1.128-2.956-.111-.275-.496-1.402.11-2.915 0 0 .921-.288 3.024 1.128a10.193 10.193 0 0 1 2.75-.371c.936 0 1.871.123 2.75.371 2.104-1.43 3.025-1.128 3.025-1.128.605 1.513.221 2.64.111 2.915.701.77 1.127 1.747 1.127 2.956 0 4.222-2.571 5.157-5.019 5.432.399.344.743 1.004.743 2.035 0 1.471-.014 2.654-.014 3.025 0 .289.206.632.756.522C19.851 20.979 23 16.854 23 12c0-6.077-4.922-11-11-11Z'%3E%3C/path%3E%3C/svg%3E");
+      background-size: contain;
+      background-repeat: no-repeat;
+      vertical-align: middle;
+    }
   }
 
   .button-add {
@@ -313,18 +308,5 @@
 
   svg.icon {
     width: 1em;
-  }
-
-  :global(.svelte-tags-input-tag::before) {
-    content: "";
-    display: inline-block;
-    width: 1.4em;
-    height: 1.4em;
-    fill: white;
-    margin-right: 0.2em;
-    background-image: url("data:image/svg+xml,%3C%3Fxml version='1.0' encoding='UTF-8' standalone='no'%3F%3E%3Csvg xmlns:svg='http://www.w3.org/2000/svg' xmlns='http://www.w3.org/2000/svg' height='32' fill='white' aria-hidden='true' viewBox='0 0 24 24' version='1.1' width='32' data-view-component='true'%3E%3Cpath d='M12 1C5.923 1 1 5.923 1 12c0 4.867 3.149 8.979 7.521 10.436.55.096.756-.233.756-.522 0-.262-.013-1.128-.013-2.049-2.764.509-3.479-.674-3.699-1.292-.124-.317-.66-1.293-1.127-1.554-.385-.207-.936-.715-.014-.729.866-.014 1.485.797 1.691 1.128.99 1.663 2.571 1.196 3.204.907.096-.715.385-1.196.701-1.471-2.448-.275-5.005-1.224-5.005-5.432 0-1.196.426-2.186 1.128-2.956-.111-.275-.496-1.402.11-2.915 0 0 .921-.288 3.024 1.128a10.193 10.193 0 0 1 2.75-.371c.936 0 1.871.123 2.75.371 2.104-1.43 3.025-1.128 3.025-1.128.605 1.513.221 2.64.111 2.915.701.77 1.127 1.747 1.127 2.956 0 4.222-2.571 5.157-5.019 5.432.399.344.743 1.004.743 2.035 0 1.471-.014 2.654-.014 3.025 0 .289.206.632.756.522C19.851 20.979 23 16.854 23 12c0-6.077-4.922-11-11-11Z'%3E%3C/path%3E%3C/svg%3E");
-    background-size: contain;
-    background-repeat: no-repeat;
-    vertical-align: middle;
   }
 </style>
